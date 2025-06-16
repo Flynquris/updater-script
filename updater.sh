@@ -2,6 +2,7 @@
 
 # version 0.3
 
+
 SELF_UPDATE_URL="https://raw.githubusercontent.com/Flynquris/updater-script/refs/heads/main/updater.sh"
 SCRIPT_PATH="$HOME/.local/bin/updater.sh"
 LOGFILE="$HOME/.local/share/updater.log"
