@@ -36,14 +36,14 @@ fi
 {
     echo "[$(date)] === System updater started ==="
 
-    echo "-> Updating packages via nala..."
-    sudo nala update
-    sudo nala upgrade -y
+    echo "-> Updating packages via apt..."
+    sudo apt update
+    sudo apt upgrade -y
 
     echo "-> Installing upgradable packages if available..."
-    upgradable=$(nala list --upgradable | awk '/^[a-z]/ {print $1}')
+    upgradable=$(apt list --upgradable | awk '/^[a-z]/ {print $1}')
     if [ -n "$upgradable" ]; then
-        sudo nala install $upgradable -y
+        sudo apt install $upgradable -y
     fi
 
     echo "-> Refreshing snap packages..."
