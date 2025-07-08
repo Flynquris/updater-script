@@ -38,30 +38,52 @@ if [ -f "$LOGFILE" ]; then
     TMPLOG=$(mktemp)
     cutoff=$(date --date='4 days ago' +%Y-%m-%d)
 
-    last_valid=$(awk -v cutoff="$cutoff" '
-        function cz_month_to_num(mesic) {
-            m["ledna"]="01"; m["února"]="02"; m["března"]="03"; m["dubna"]="04";
-            m["května"]="05"; m["června"]="06"; m["července"]="07"; m["srpna"]="08";
-            m["září"]="09"; m["října"]="10"; m["listopadu"]="11"; m["prosince"]="12";
-            return (m[mesic] ? m[mesic] : "00");
-        }
-        /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+[0-9]{1,2}\.\s+([a-záčďéěíňóřšťúůýž]+)[a-z]*\s+[0-9]{4},/ {
-            match($0, /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+([0-9]{1,2})\.\s+([a-záčďéěíňóřšťúůýž]+)[a-z]*\s+([0-9]{4}),/, arr)
-            d = (length(arr[1]) == 1 ? "0" arr[1] : arr[1])
-            m = cz_month_to_num(arr[2])
-            y = arr[3]
-            if (y m d >= gensub("-", "", "g", cutoff)) last = NR
-        }
-        END { if (last) print last; else print 0 }
-    ' "$LOGFILE")
+    # Projde log a zapamatuje číslo řádku posledního timestampu, který je v cutoffu nebo novější
+    lastline=0
+    lineno=0
 
-    if [ "$last_valid" -eq 0 ]; then
-        # No recent entry – wipe whole log!
-        : > "$LOGFILE"
+    # Funkce převodu měsíce
+    cz_month_to_num() {
+        case "$1" in
+            ledna) echo 01;;
+            února) echo 02;;
+            března) echo 03;;
+            dubna) echo 04;;
+            května) echo 05;;
+            června) echo 06;;
+            července) echo 07;;
+            srpna) echo 08;;
+            září) echo 09;;
+            října) echo 10;;
+            listopadu) echo 11;;
+            prosince) echo 12;;
+            *) echo 00;;
+        esac
+    }
+
+    while IFS= read -r line; do
+        lineno=$((lineno+1))
+        if [[ $line =~ \[([A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+)\ ([0-9]{1,2})\.\ ([a-záčďéěíňóřšťúůýž]+)\ ([0-9]{4}), ]]; then
+            day="${BASH_REMATCH[2]}"
+            [[ ${#day} -eq 1 ]] && day="0$day"
+            month=$(cz_month_to_num "${BASH_REMATCH[3]}")
+            year="${BASH_REMATCH[4]}"
+            logdate="${year}-${month}-${day}"
+            if [[ "$logdate" > "$cutoff" ]] || [[ "$logdate" == "$cutoff" ]]; then
+                lastline=$lineno
+            fi
+        fi
+    done < "$LOGFILE"
+
+    if [[ $lastline -gt 0 ]]; then
+        # Zachovej od posledního mladého timestampu včetně
+        tail -n +"$lastline" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
     else
-        tail -n +"$last_valid" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
+        # Nenašel se žádný timestamp v limitu, smaž vše
+        : > "$LOGFILE"
     fi
 fi
+
 
 # --- LOCK: Avoid running multiple updaters at once ---
 exec 9>"$LOCKFILE"
