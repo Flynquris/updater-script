@@ -7,7 +7,6 @@ SCRIPT_PATH="$HOME/.local/bin/updater.sh"
 LOGFILE="$HOME/.local/share/updater.log"
 LOCKFILE="/tmp/updater.lock"
 
-# --- SAFE SELF-UPDATE MECHANISM ---
 TMPFILE="${SCRIPT_PATH}.new"
 
 echo "[$(date)] Updater: Checking for self-update..." | tee -a "$LOGFILE"
@@ -17,7 +16,7 @@ if curl -fsSL "$SELF_UPDATE_URL" -o "$TMPFILE"; then
             echo "[$(date)] Updater: New version downloaded, replacing script..." | tee -a "$LOGFILE"
             mv "$TMPFILE" "$SCRIPT_PATH"
             chmod +x "$SCRIPT_PATH"
-            exec "$SCRIPT_PATH" "$@"  
+            exec "$SCRIPT_PATH" "$@"
             exit 0
         else
             echo "[$(date)] Updater: No update needed." | tee -a "$LOGFILE"
@@ -31,7 +30,17 @@ else
     echo "[$(date)] Updater: Download failed, aborting self-update!" | tee -a "$LOGFILE"
     rm -f "$TMPFILE"
 fi
-# --- End of safe self-update ---
+
+if [ -f "$LOGFILE" ]; then
+    TMPLOG=$(mktemp)
+    awk -v cutoff="$(date --date='4 days ago' '+%a %b %d')" '
+        {
+            logdate = substr($0, 2, 10);
+            if (logdate >= cutoff) print $0;
+            else if (NF < 5) print $0;
+        }
+    ' "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
+fi
 
 {
     echo "[$(date)] === System updater started ==="
@@ -41,7 +50,7 @@ fi
     sudo apt upgrade -y
 
     echo "-> Installing upgradable packages if available..."
-    upgradable=$(apt list --upgradable | awk '/^[a-z]/ {print $1}')
+    upgradable=$(apt list --upgradable 2>/dev/null | awk -F/ '/upgradable from/ {print $1}')
     if [ -n "$upgradable" ]; then
         sudo apt install $upgradable -y
     fi
