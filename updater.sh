@@ -33,21 +33,30 @@ fi
 
 if [ -f "$LOGFILE" ]; then
     TMPLOG=$(mktemp)
-    cutoff=$(date --date='4 days ago' +%Y%m%d)
+    cutoff=$(date --date='4 days ago' +%Y-%m-%d)
 
-    awk -v cutoff="$cutoff" '
-        match($0, /^\[[A-Za-záčďéěíňóřšťúůýž]+\s+([0-9]{1,2})\.\s+([a-záčďéěíňóřšťúůýž]+)\s+([0-9]{4}),/, arr) {
-            # arr[1]=den, arr[2]=měsíc slovem, arr[3]=rok
-            months["ledna"]="01"; months["února"]="02"; months["března"]="03"; months["dubna"]="04"; months["května"]="05"; months["června"]="06";
-            months["července"]="07"; months["srpna"]="08"; months["září"]="09"; months["října"]="10"; months["listopadu"]="11"; months["prosince"]="12";
-            y = arr[3];
-            m = months[arr[2]];
-            d = (length(arr[1]) == 1 ? "0" arr[1] : arr[1]);
-            ymd = y m d;
-            if (ymd >= cutoff) print $0;
+    # Najdi číslo posledního řádku, který je ve 4 dnech
+    last_valid=$(awk -v cutoff="$cutoff" '
+        function cz_month_to_num(mesic) {
+            m["ledna"]="01"; m["února"]="02"; m["března"]="03"; m["dubna"]="04";
+            m["května"]="05"; m["června"]="06"; m["července"]="07"; m["srpna"]="08";
+            m["září"]="09"; m["října"]="10"; m["listopadu"]="11"; m["prosince"]="12";
+            return (m[mesic] ? m[mesic] : "00");
         }
-        !/^\[[A-Za-záčďéěíňóřšťúůýž]+\s+[0-9]{1,2}\.\s+[a-záčďéěíňóřšťúůýž]+\s+[0-9]{4},/ { print $0; }
-    ' "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
+        /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+[0-9]{1,2}\.\s+[a-záčďéěíňóřšťúůýž]+[a-z]*\s+[0-9]{4},/ {
+            match($0, /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+([0-9]{1,2})\.\s+([a-záčďéěíňóřšťúůýž]+)[a-z]*\s+([0-9]{4}),/, arr)
+            d = (length(arr[1]) == 1 ? "0" arr[1] : arr[1])
+            m = cz_month_to_num(arr[2])
+            y = arr[3]
+            if (y m d >= gensub("-", "", "g", cutoff)) last = NR
+        }
+        END { print last }
+    ' "$LOGFILE")
+
+    # Pokud byl takový řádek nalezen, smaž vše před ním
+    if [ -n "$last_valid" ]; then
+        tail -n +"$last_valid" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
+    fi
 fi
 
 {
