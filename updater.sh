@@ -33,12 +33,20 @@ fi
 
 if [ -f "$LOGFILE" ]; then
     TMPLOG=$(mktemp)
-    awk -v cutoff="$(date --date='4 days ago' '+%a %b %d')" '
-        {
-            logdate = substr($0, 2, 10);
-            if (logdate >= cutoff) print $0;
-            else if (NF < 5) print $0;
+    cutoff=$(date --date='4 days ago' +%Y%m%d)
+
+    awk -v cutoff="$cutoff" '
+        match($0, /^\[[A-Za-záčďéěíňóřšťúůýž]+\s+([0-9]{1,2})\.\s+([a-záčďéěíňóřšťúůýž]+)\s+([0-9]{4}),/, arr) {
+            # arr[1]=den, arr[2]=měsíc slovem, arr[3]=rok
+            months["ledna"]="01"; months["února"]="02"; months["března"]="03"; months["dubna"]="04"; months["května"]="05"; months["června"]="06";
+            months["července"]="07"; months["srpna"]="08"; months["září"]="09"; months["října"]="10"; months["listopadu"]="11"; months["prosince"]="12";
+            y = arr[3];
+            m = months[arr[2]];
+            d = (length(arr[1]) == 1 ? "0" arr[1] : arr[1]);
+            ymd = y m d;
+            if (ymd >= cutoff) print $0;
         }
+        !/^\[[A-Za-záčďéěíňóřšťúůýž]+\s+[0-9]{1,2}\.\s+[a-záčďéěíňóřšťúůýž]+\s+[0-9]{4},/ { print $0; }
     ' "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
 fi
 
