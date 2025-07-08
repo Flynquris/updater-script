@@ -1,12 +1,13 @@
 #!/bin/bash
 
-# version 0.3
+# version 0.4
 
 SELF_UPDATE_URL="https://raw.githubusercontent.com/Flynquris/updater-script/refs/heads/main/updater.sh"
 SCRIPT_PATH="$HOME/.local/bin/updater.sh"
 LOGFILE="$HOME/.local/share/updater.log"
 LOCKFILE="/tmp/updater.lock"
 
+# --- SAFE SELF-UPDATE MECHANISM ---
 TMPFILE="${SCRIPT_PATH}.new"
 
 echo "[$(date)] Updater: Checking for self-update..." | tee -a "$LOGFILE"
@@ -30,12 +31,13 @@ else
     echo "[$(date)] Updater: Download failed, aborting self-update!" | tee -a "$LOGFILE"
     rm -f "$TMPFILE"
 fi
+# --- End of safe self-update ---
 
+# --- LOG ROTATION: Keep only the last 4 days based on Czech date format ---
 if [ -f "$LOGFILE" ]; then
     TMPLOG=$(mktemp)
     cutoff=$(date --date='4 days ago' +%Y-%m-%d)
 
-    # Najdi číslo posledního řádku, který je ve 4 dnech
     last_valid=$(awk -v cutoff="$cutoff" '
         function cz_month_to_num(mesic) {
             m["ledna"]="01"; m["února"]="02"; m["března"]="03"; m["dubna"]="04";
@@ -43,21 +45,27 @@ if [ -f "$LOGFILE" ]; then
             m["září"]="09"; m["října"]="10"; m["listopadu"]="11"; m["prosince"]="12";
             return (m[mesic] ? m[mesic] : "00");
         }
-        /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+[0-9]{1,2}\.\s+[a-záčďéěíňóřšťúůýž]+[a-z]*\s+[0-9]{4},/ {
+        /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+[0-9]{1,2}\.\s+([a-záčďéěíňóřšťúůýž]+)[a-z]*\s+[0-9]{4},/ {
             match($0, /^\[[A-Za-zČŠŽŘĎŤŇÁÉĚÍÓÚŮÝčšžřďťňáéěíóúůýž]+\s+([0-9]{1,2})\.\s+([a-záčďéěíňóřšťúůýž]+)[a-z]*\s+([0-9]{4}),/, arr)
             d = (length(arr[1]) == 1 ? "0" arr[1] : arr[1])
             m = cz_month_to_num(arr[2])
             y = arr[3]
             if (y m d >= gensub("-", "", "g", cutoff)) last = NR
         }
-        END { print last }
+        END { if (last) print last; else print 0 }
     ' "$LOGFILE")
 
-    # Pokud byl takový řádek nalezen, smaž vše před ním
-    if [ -n "$last_valid" ]; then
+    if [ "$last_valid" -eq 0 ]; then
+        # No recent entry – wipe whole log!
+        : > "$LOGFILE"
+    else
         tail -n +"$last_valid" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
     fi
 fi
+
+# --- LOCK: Avoid running multiple updaters at once ---
+exec 9>"$LOCKFILE"
+flock -n 9 || { echo "[$(date)] Updater: Already running, exiting." | tee -a "$LOGFILE"; exit 1; }
 
 {
     echo "[$(date)] === System updater started ==="
@@ -67,7 +75,7 @@ fi
     sudo apt upgrade -y
 
     echo "-> Installing upgradable packages if available..."
-    upgradable=$(apt list --upgradable 2>/dev/null | awk -F/ '/upgradable from/ {print $1}')
+    upgradable=$(apt list --upgradeable 2>/dev/null | awk -F/ '/upgradable from/ {print $1}')
     if [ -n "$upgradable" ]; then
         sudo apt install $upgradable -y
     fi
@@ -106,3 +114,4 @@ fi
     echo "[$(date)] === System update complete ==="
     echo
 } >> "$LOGFILE" 2>&1
+
