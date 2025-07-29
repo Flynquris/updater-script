@@ -41,20 +41,20 @@ fi
 if [ -f "$LOGFILE" ]; then
     TMPLOG=$(mktemp)
     cutoff=$(date --date='4 days ago' +%Y-%m-%d)
-    # Find the last line with a timestamp newer or equal to cutoff, then keep that and everything after
-    lastline=0
+    firstline=0
     lineno=0
     while IFS= read -r line; do
         lineno=$((lineno+1))
         if [[ $line =~ \[([0-9]{4})-([0-9]{2})-([0-9]{2}) ]]; then
             logdate="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}-${BASH_REMATCH[3]}"
             if [[ "$logdate" > "$cutoff" ]] || [[ "$logdate" == "$cutoff" ]]; then
-                lastline=$lineno
+                firstline=$lineno
+                break
             fi
         fi
     done < "$LOGFILE"
-    if [[ $lastline -gt 0 ]]; then
-        tail -n +"$lastline" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
+    if [[ $firstline -gt 0 ]]; then
+        tail -n +"$firstline" "$LOGFILE" > "$TMPLOG" && mv "$TMPLOG" "$LOGFILE"
     else
         : > "$LOGFILE"
     fi
