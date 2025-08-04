@@ -105,6 +105,9 @@ flock -n 9 || { echo "[$(timestamp)] Updater: Already running, exiting." | tee -
         bun upgrade
     fi
 
+    echo "Running postfix updates..."
+    sudo dpkg --configure -a
+
     echo "-> Fixing world-writable directories (adding sticky bit)..."
     sudo find / -type d \( -perm -0002 -a ! -perm -1000 \) -exec chmod +t {} \; 2>/dev/null
 
