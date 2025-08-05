@@ -111,6 +111,9 @@ flock -n 9 || { echo "[$(timestamp)] Updater: Already running, exiting." | tee -
     echo "-> Fixing world-writable directories (adding sticky bit)..."
     sudo find / -type d \( -perm -0002 -a ! -perm -1000 \) -exec chmod +t {} \; 2>/dev/null
 
+    echo "Cleaning unused packages..."
+    sudo apt autoremove -y
+
     echo "[$(timestamp)] === System update complete ==="
     echo
 } >> "$LOGFILE" 2>&1
